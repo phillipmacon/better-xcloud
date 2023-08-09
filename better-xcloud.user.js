@@ -1784,7 +1784,6 @@ function interceptHttpRequests() {
     window.fetch = async (...arg) => {
         const request = arg[0];
         const url = (typeof request === 'string') ? request : request.url;
-
         // Server list
         if (url.endsWith('/v2/login/user')) {
             const promise = orgFetch(...arg);
@@ -2800,14 +2799,55 @@ function disablePwa() {
 }
 
 
+function safariWorkaround() {
+    try {
+        // Get auth token from localStorage
+        const userInfo = JSON.parse(localStorage.getItem('xboxcom_xbl_user_info'));
+        const gssvToken = userInfo.tokens['http://gssv.xboxlive.com/'].token;
+        
+        // Script to request the region list again
+        const fetchScript = `
+fetch('https://xgpuweb.gssv-play-prod.xboxlive.com/v2/login/user', {
+    method: 'POST',
+    body: '{"token":"${gssvToken}","offeringId":"xgpuweb"}',
+    headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+    },
+}).finally(() => {
+    // Remove <script> tag from HTML body
+    document.documentElement.removeChild(document.getElementById('better-xcloud-script-fetch'));
+});
+`
+        // Inject the script into the web page
+        const $script = createElement('script', {'id': 'better-xcloud-script-fetch'});
+        $script.innerHTML = fetchScript;
+        document.documentElement.appendChild($script);
+        
+        // Re-assign PRELOADED_STATE
+        const scriptTags = document.querySelectorAll('script');
+        for (let $elm of scriptTags) {
+            if ($elm.textContent && $elm.textContent.substring(0, 50).includes('__PRELOADED_STATE__')) {
+                const $script = document.createElement('script');
+                $script.innerHTML = $elm.innerHTML;
+
+                // Re-apply the script tag to execute it again
+                PreloadedState.override();
+                $elm.parentElement.replaceChild($script, $elm);
+                break;
+            }
+        }
+    } catch (e) {
+        console.log(e);
+    }
+}
+
+
 // Hide Settings UI when navigate to another page
 window.addEventListener('xcloud_popstate', onHistoryChanged);
 window.addEventListener('popstate', onHistoryChanged);
 // Make pushState/replaceState methods dispatch "xcloud_popstate" event
 window.history.pushState = patchHistoryMethod('pushState');
 window.history.replaceState = patchHistoryMethod('replaceState');
-
-PreloadedState.override();
 
 // Disable bandwidth checking
 if (PREFS.get(Preferences.DISABLE_BANDWIDTH_CHECKING)) {
@@ -2848,3 +2888,12 @@ setupScreenshotButton();
 StreamStats.render();
 
 disablePwa();
+
+// Userscript was loaded before the page loaded
+// Safari == 'interactive'
+if (document.readyState === 'loading') {
+    PreloadedState.override();
+} else if (Object.keys(SERVER_REGIONS).length === 0) {
+    // Patch Safari
+    safariWorkaround();
+}
