@@ -13,6 +13,11 @@
 // ==/UserScript==
 'use strict';
 
+if (document.readyState !== 'loading') {
+    window.location = 'https://www.xbox.com/auth/msa?action=logIn&returnUrl=https%3A%2F%2Fwww.xbox.com%2Fplay&prompt=none';
+    throw new Error('[Better xCloud] Executing workaround for Safari');
+}
+
 const SCRIPT_VERSION = '1.10.2';
 const SCRIPT_HOME = 'https://github.com/redphx/better-xcloud';
 
@@ -1784,6 +1789,7 @@ function interceptHttpRequests() {
     window.fetch = async (...arg) => {
         const request = arg[0];
         const url = (typeof request === 'string') ? request : request.url;
+
         // Server list
         if (url.endsWith('/v2/login/user')) {
             const promise = orgFetch(...arg);
@@ -2836,6 +2842,7 @@ fetch('https://xgpuweb.gssv-play-prod.xboxlive.com/v2/login/user', {
                 break;
             }
         }
+        
     } catch (e) {
         console.log(e);
     }
